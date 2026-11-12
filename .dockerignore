@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.local
+bin/
+tmp/
+coverage.out
+coverage.html
+*.out
+README.md
+TODO_API.md

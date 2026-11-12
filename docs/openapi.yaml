@@ -1,0 +1,484 @@
+openapi: 3.0.3
+info:
+  title: RePurpose.ai API
+  version: 1.0.0
+  description: |
+    Backend API untuk RePurpose.ai. Endpoint utama memetakan 6 titik integrasi
+    yang ditandai di repo re-purpose-fe. Path `/api/...` tersedia sebagai alias
+    dari `/api/v1/...` agar frontend dapat langsung terhubung.
+servers:
+  - url: http://localhost:8080
+    description: Local
+security:
+  - bearerAuth: []
+tags:
+  - name: Content
+    description: Ekstraksi URL, generasi, reroll, dan riwayat
+  - name: System
+    description: Status layanan dan model engine
+  - name: User
+    description: Profil pengguna dan kuota
+  - name: Analytics
+    description: Telemetri sponsor/partner
+  - name: Meta
+    description: Katalog error dan health check
+
+paths:
+  /api/v1/ping:
+    get:
+      tags: [Meta]
+      summary: Health check
+      security: []
+      responses:
+        "204":
+          description: No Content
+
+  /api/v1/content/extract-url:
+    post:
+      tags: [Content]
+      summary: "TITIK INTEGRASI API #1 - Ekstraksi konten dari URL"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://example.com/artikel
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      title: { type: string }
+                      content: { type: string }
+                      wordCount: { type: integer }
+                      data:
+                        $ref: "#/components/schemas/ExtractURLResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/content/generate:
+    post:
+      tags: [Content]
+      summary: "TITIK INTEGRASI API #2 - Generasi konten multi-platform"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateContentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      generationId: { type: string }
+                      data:
+                        $ref: "#/components/schemas/PlatformOutputs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/content/reroll:
+    post:
+      tags: [Content]
+      summary: "TITIK INTEGRASI API #3 - Acak ulang variasi konten"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateContentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      generationId: { type: string }
+                      data:
+                        $ref: "#/components/schemas/PlatformOutputs"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/content/generations:
+    get:
+      tags: [Content]
+      summary: Riwayat generasi pengguna
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 10, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Generation"
+                          meta:
+                            $ref: "#/components/schemas/PaginationMeta"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/content/generations/{id}:
+    get:
+      tags: [Content]
+      summary: Detail generasi berdasarkan ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Generation"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/system/status:
+    get:
+      tags: [System]
+      summary: "TITIK INTEGRASI API #4 - Status layanan & model engine"
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SystemStatus"
+
+  /api/v1/user/me:
+    get:
+      tags: [User]
+      summary: "TITIK INTEGRASI API #5 - Profil & tier pengguna"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/analytics/sponsor-click:
+    post:
+      tags: [Analytics]
+      summary: "TITIK INTEGRASI API #6 - Analitik klik sponsor"
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sponsorId, event]
+              properties:
+                sponsorId: { type: string, example: supascale-01 }
+                event: { type: string, enum: [click, impression, close] }
+                timestamp: { type: string, format: date-time, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          sponsorId: { type: string }
+                          event: { type: string }
+                          trackedAt: { type: string, format: date-time }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/errors:
+    get:
+      tags: [Meta]
+      summary: Katalog kode error (EN/ID)
+      security: []
+      parameters:
+        - in: query
+          name: lang
+          schema: { type: string, enum: [en, id], default: id }
+      responses:
+        "200":
+          description: OK
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    BadGateway:
+      description: Upstream failure (extractor/LLM)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        id: { type: string }
+        traceId: { type: string, description: Request/trace id, also sent as X-Request-ID }
+        appName: { type: string }
+        version: { type: string }
+        build: { type: string }
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data: { nullable: true }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        id: { type: string }
+        traceId: { type: string, description: Request/trace id, also sent as X-Request-ID }
+        appName: { type: string }
+        version: { type: string }
+        build: { type: string }
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errorCode: { type: string, example: RPUR-400003 }
+        data: { nullable: true }
+
+    ExtractionRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+
+    ExtractURLResponse:
+      type: object
+      properties:
+        title: { type: string }
+        content: { type: string }
+        wordCount: { type: integer }
+
+    GenerateContentRequest:
+      type: object
+      required: [rawText, tone, audience]
+      properties:
+        rawText: { type: string, example: "Draf artikel panjang..." }
+        tone: { type: string, enum: [viral, executive, deep] }
+        audience: { type: string, example: "Founder & Solo Creator" }
+        sourceUrl: { type: string, format: uri }
+
+    GenerateContentResponse:
+      type: object
+      properties:
+        generationId: { type: string }
+        data: { $ref: "#/components/schemas/PlatformOutputs" }
+
+    Generation:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+        tone: { type: string }
+        audience: { type: string }
+        sourceUrl: { type: string }
+        data: { $ref: "#/components/schemas/PlatformOutputs" }
+        createdAt: { type: string, format: date-time }
+
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    PlatformOutputs:
+      type: object
+      properties:
+        tweets:
+          type: array
+          items: { $ref: "#/components/schemas/Tweet" }
+        linkedin: { $ref: "#/components/schemas/LinkedInPost" }
+        videoScript: { $ref: "#/components/schemas/VideoScript" }
+        telemetry: { $ref: "#/components/schemas/Telemetry" }
+
+    Tweet:
+      type: object
+      properties:
+        id: { type: integer }
+        stage: { type: string }
+        charCount: { type: integer }
+        content: { type: string }
+
+    LinkedInPost:
+      type: object
+      properties:
+        wordCount: { type: integer }
+        readTime: { type: string }
+        headline: { type: string }
+        hook: { type: string }
+        foldNote: { type: string }
+        context:
+          type: array
+          items: { type: string }
+        frameworkTitle: { type: string }
+        frameworkPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              bold: { type: string }
+              desc: { type: string }
+        closingQuestion: { type: string }
+        hashtags:
+          type: array
+          items: { type: string }
+
+    VideoScript:
+      type: object
+      properties:
+        audioGuide: { type: string }
+        targetDuration: { type: string }
+        blocks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              timeRange: { type: string }
+              title: { type: string }
+              tag: { type: string }
+              tagColor: { type: string, enum: [sky, indigo, slate, primary] }
+              visualCue: { type: string }
+              dialogue: { type: string }
+
+    Telemetry:
+      type: object
+      properties:
+        latency: { type: string }
+        confidence: { type: string }
+        tokens: { type: string }
+        semanticDeviation: { type: string }
+        wordCount: { type: integer }
+        channelCount: { type: integer }
+
+    SystemStatus:
+      type: object
+      properties:
+        status: { type: string, enum: [operational, degraded, down] }
+        version: { type: string }
+        environment: { type: string }
+        uptimeSeconds: { type: integer, format: int64 }
+        engine:
+          type: object
+          properties:
+            provider: { type: string }
+            model: { type: string }
+            status: { type: string }
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              status: { type: string }
+              latencyMs: { type: integer, format: int64 }
+              detail: { type: string }
+        checkedAt: { type: string, format: date-time }
+
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        avatarUrl: { type: string }
+        tier: { type: string, enum: [FREE, PRO] }
+        dailyCredits: { type: integer }
+        monthlyCredits: { type: integer }

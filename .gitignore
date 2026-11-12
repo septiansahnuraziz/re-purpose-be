@@ -1,0 +1,27 @@
+# Environment & secrets
+.env
+.env.local
+*.pem
+*credential*.json
+
+# Go build artifacts
+/bin/
+/tmp/
+main
+*.exe
+*.test
+*.out
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config overrides
+config.local.yaml
